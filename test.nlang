@@ -16,8 +16,9 @@ func main()
    #printf("fffpp |%lli|    ", fffpp);
    #fclose(ffff);
 
-   #var ala = String();
-   printf("XXXXX %lli ", String() . 5);
+   var ala = String();
+   var ccc = ala . 5;
+   printf("XXXXX %lli  ",  ccc );
    #printf("FILE: %p'%.*s'  ", str, fsize, str);
 
 

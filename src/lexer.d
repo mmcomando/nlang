@@ -743,6 +743,62 @@ struct CompModule
     LLVMTypeRef stringType;
 }
 
+LLVMValueRef genGroup(Group* gg, CompModule* compModule, int start, ref int end)
+{
+    int32 ww = start;
+    LLVMValueRef lastVal;
+    char lastOp;
+    while (gg && ww < gg.elementsSize)
+    {
+        GroupElement* ee = gg.elements + ww;
+
+        LLVMValueRef val = genGroupElement(ee, compModule);
+        if (lastVal != null)
+        {
+            if (lastOp == '+')
+            {
+                lastVal = LLVMBuildAdd(compModule.builder, lastVal, val, "tmp");
+            }
+            else if (lastOp == '-')
+            {
+                lastVal = LLVMBuildSub(compModule.builder, lastVal, val, "tmp");
+            }
+            else if (lastOp == '.')
+            {
+                lastVal = LLVMBuildExtractValue(compModule.builder, lastVal, 1, "gett");
+            }
+            else
+            {
+                assert(0);
+            }
+        }
+        else
+        {
+            lastVal = val;
+        }
+
+        if (ee.op == null)
+        {
+            break;
+        }
+        if (ee.op.ptr[0] == ',')
+        {
+            break;
+        }
+        lastOp = ee.op.ptr[0];
+        ww++;
+
+      
+        assert(lastOp == '+' || lastOp == '-' || lastOp == '.');
+    }  
+    end = ww;
+
+
+    return lastVal;
+
+
+}
+
 LLVMValueRef genGroupElement(GroupElement* groupElement, CompModule* compModule)
 {
     LLVMValueRef lastVal;
@@ -753,14 +809,14 @@ LLVMValueRef genGroupElement(GroupElement* groupElement, CompModule* compModule)
         s.ptr[s.size] = '\0';
         if (s.ptr[0] == '"')
         {
-            printf("String Array:  '%.*s'\n", s.size, s.ptr);
+            // printf("String Array:  '%.*s'\n", s.size, s.ptr);
             s.ptr[s.size - 1] = '\0';
             lastVal = LLVMBuildGlobalStringPtr(compModule.builder, cast(char*) s.ptr + 1, cast(char*) s.ptr + 1);
             s.ptr[s.size - 1] = '"';
         }
         else if (s.ptr[0] >= '0' && s.ptr[0] <= '9')
         {
-            printf("Number:  '%.*s'\n", s.size, s.ptr);
+            // printf("Number:  '%.*s'\n", s.size, s.ptr);
             int64 x = strtoll(cast(char*) s.ptr, null, 10);
             //printf("D %d\n", x);
             lastVal = LLVMConstInt(LLVMInt64Type(), x, true);
@@ -768,7 +824,7 @@ LLVMValueRef genGroupElement(GroupElement* groupElement, CompModule* compModule)
         }
         else
         {
-            printf("Var:  '%.*s' \n", s.size, s.ptr);
+            // printf("Var:  '%.*s' \n", s.size, s.ptr);
             string name = s.getString();
             lastVal = compModule.values[name];
         }
@@ -811,66 +867,26 @@ LLVMValueRef genStatement(Statement* stm, CompModule* compModule)
 
         Group* gg = ff.group;
         int32 ww = 0;
-        LLVMValueRef lastVal;
-        char lastOp;
+        // char lastOp;
         while (gg && ww < gg.elementsSize)
         {
-            printf("Op %d\n", ww);
+            LLVMValueRef lastVal;
+
+            lastVal = genGroup(gg, compModule, ww, ww);
             GroupElement* ee = gg.elements + ww;
+            assert(ee.op == null || ee.op.ptr[0] == ',');
+            ww++;
+            arguments[argsLen] = lastVal;
+            LLVMDumpValue(lastVal);
+            printf("\n");
+            lastVal = null;
+            argsLen++;
 
-            LLVMValueRef val = genGroupElement(ee, compModule);
-            if (lastVal != null)
-            {
-                if (lastOp == '+')
-                {
-                    lastVal = LLVMBuildAdd(compModule.builder, lastVal, val, "tmp");
-                }
-                else if (lastOp == '-')
-                {
-                    lastVal = LLVMBuildSub(compModule.builder, lastVal, val, "tmp");
-                }
-                else if (lastOp == '.')
-                {
-                    //printf("Op11 %d\n", ww);
-                    // auto vvv = LLVMBuildBitCast (compModule.builder, lastVal, LLVMPointerType(compModule.stringType, 0), "zz");
-                    // printf("Op22s %d\n", ww);
-                    //LLVMDumpValue(lastVal);
-                    lastVal = LLVMBuildExtractValue(compModule.builder, lastVal, 1, "gett");
-            //lastVal = LLVMConstInt(LLVMInt64Type(), 5, true);
-                     //lastVal = 	LLVMBuildStructGEP2 (compModule.builder, LLVMPointerType(compModule.stringType, 0), vvv, 1, "gett");
-                }
-                else
-                {
-                    assert(0);
-                }
-            }
-            else
-            {
-                lastVal = val;
-            }
-
-            if (ee.op == null)
-            {
-                arguments[argsLen] = lastVal;
-                LLVMDumpValue(lastVal);
-            printf("|||| %d  \n", argsLen);
-                lastVal = null;
-                argsLen++;
+            if(ee.op == null){
                 break;
             }
-
-            lastOp = ee.op.ptr[0];
-
-            if (ee.op.ptr[0] == ',')
-            {
-                arguments[argsLen] = lastVal;
-                LLVMDumpValue(lastVal);
-            printf("|||| %d  \n", argsLen);
-                lastVal = null;
-                argsLen++;
-            }
-            ww++;
         }
+        printf("FunCallEnd '%.*s' args(%d) \n", ff.name.size, ff.name.ptr, argsLen);
 
         auto fffff = compModule.functions[ffName];
         return LLVMBuildCall(compModule.builder, fffff, arguments.ptr, argsLen, ffName.toStringz());
@@ -879,14 +895,24 @@ LLVMValueRef genStatement(Statement* stm, CompModule* compModule)
     else if (stm.type == StatementType.t_var)
     {
         Group* gg = cast(Group*) stm.ptr;
-        assert(gg.elementsSize == 2);
+        assert(gg.elementsSize >= 2);
 
         GroupElement* firstElement = gg.elements;
+        assert(firstElement.op.ptr[0]=='=');
         assert(firstElement.stm.type == StatementType.t_String);
         String* s = cast(String*) firstElement.stm.ptr;
         string valName = s.getString();
 
-        LLVMValueRef val = genGroupElement(gg.elements + 1, compModule);
+        int ww = 1;
+        LLVMValueRef val = genGroup(gg, compModule, ww, ww);
+        assert(ww + 1 == gg.elementsSize);
+
+        printf("var '%.*s' = ", s.size, s.ptr);
+        printf("\n");
+        LLVMDumpValue(val);
+        printf("\n");
+
+        // LLVMValueRef val = genGroupElement(gg.elements + 1, compModule);
         compModule.values[valName] = val;
         return null;
 
@@ -1072,7 +1098,7 @@ void main()
     genModule(&modul);
 
 }
-
+// rdmd -g  -L-lLLVM-8 -version=LLVM_8_0_0 -verrors=context -checkaction=context workaround.o src/lexer.d
 // rdmd -g  -L-lLLVM-8 -version=LLVM_8_0_0 src/lexer.d
 // llc-8 -relocation-model=pic -filetype=obj mmm.bc && gcc mmm.o && ./a.out 
 // llvm-dis-8 mmm.bc
