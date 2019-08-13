@@ -1,0 +1,24 @@
+func main()
+{
+   #printf("AAA|%.*s|AAa %lli %lli     ", 5, "1234567890", 5 - 2, 765 + 2);
+
+   #var seek_end = i32(2);
+   #var seek_set = i32(0);
+   #var ffff = fopen("test.nlang", "rb");
+   #printf("seek_end |%lli|    ", seek_end);
+   #printf("ffff |%p|    ", ffff);
+   #fseek(ffff, 0, seek_end);
+   #var fsize = ftell(ffff);
+   #printf("fsize |%lli|    ", fsize);
+   #fseek(ffff, 0, seek_set);
+   #var str =  calloc(1, fsize + 1);
+   #var fffpp = fread(str, 1, fsize, ffff);
+   #printf("fffpp |%lli|    ", fffpp);
+   #fclose(ffff);
+
+   #var ala = String();
+   printf("XXXXX %lli ", String() . 5);
+   #printf("FILE: %p'%.*s'  ", str, fsize, str);
+
+
+} 
